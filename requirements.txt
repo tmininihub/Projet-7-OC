@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+requests
+python-dotenv
+joblib
+numpy
+faiss-cpu
+mistralai
+langchain
+langchain-mistralai
+langchain-community
+ragas
