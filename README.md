@@ -1,188 +1,123 @@
-# Projet 7 OpenClassrooms — Système RAG
+# Projet 7 OpenClassrooms — Système de recommandation d'événements culturels par RAG
 
-API de recommandation d'événements culturels à Paris fondée sur une architecture **RAG** (*Retrieval-Augmented Generation*).
+Ce projet propose une **API de recommandation d'événements culturels à Paris** à partir de requêtes formulées en langage naturel. Il repose sur une architecture **RAG** (*Retrieval-Augmented Generation*) combinant recherche sémantique, base vectorielle et modèle de langage.
 
-Le système associe une recherche sémantique dans un index **FAISS** à la génération d'une réponse par un modèle **Mistral**. Un utilisateur peut, par exemple, demander : « Je cherche un événement sur le spatial à Paris ».
+L'objectif est de retrouver des événements proches de l'intention de l'utilisateur, puis de les présenter sous une forme structurée et lisible.
 
-> **État du projet :** prototype fonctionnel avec index et données pré-calculés, API FastAPI et conteneurisation Docker. Les éléments d'évaluation présentés ci-dessous distinguent les observations communiquées des mesures non encore établies.
+## 1. Architecture générale
 
-## Sommaire
-
-1. [Architecture et parcours d'une requête](#architecture-et-parcours-dune-requête)
-2. [Données et construction de l'index](#données-et-construction-de-lindex)
-3. [Choix technologiques et modèles](#choix-technologiques-et-modèles)
-4. [Installation et exécution avec Docker](#installation-et-exécution-avec-docker)
-5. [API et exemples d'utilisation](#api-et-exemples-dutilisation)
-6. [Tests, couverture et évaluation](#tests-couverture-et-évaluation)
-7. [Résultats observés et limites](#résultats-observés-et-limites)
-8. [Pistes d'amélioration](#pistes-damélioration)
-9. [Structure du dépôt](#structure-du-dépôt)
-
-## Architecture et parcours d'une requête
+Le système comporte deux étapes complémentaires : la **préparation des données** et la **recherche avec génération de réponse**.
 
 ```text
-                   CONSTRUCTION DE L'INDEX (/Build)
-OpenDataSoft / OpenAgenda (événements parisiens)
-             |
-             v
-Champs : titre + description + date + lieu
-             |
-             v
-Découpage en chunks de 500 caractères
-             |
-             v
-Mistral Embeddings (mistral-embed-2312)
-             |
-             v
-Vecteurs de 1 024 dimensions 
-             |
-      FAISS IndexFlatL2
-             |
-             v
-  Sauvegarde locale (joblib)
+                 INDEXATION
+OpenAgenda / OpenDataSoft
+          │
+          ▼
+Extraction : titre, description, date, lieu
+          │
+          ▼
+Découpage en segments de 500 caractères
+          │
+          ▼
+Embeddings Mistral — 1 024 dimensions
+          │
+          ▼
+Index vectoriel FAISS + association aux événements
+          │
+          ▼
+Sauvegarde des données et de l'index
 
 
-                      RECHERCHE (/RAG)
-Question de l'utilisateur
-             |
-             v
-Embedding de la question (même modèle Mistral)
-             |
-             v
-Recherche des 5 vecteurs les plus proches dans FAISS
-             |
-             v
-Remontée aux événements grâce aux chunks 
-             |
-             v
-Mistral Small : sélection, classement et mise en forme
-             |
-             v
-Réponse JSON servie par FastAPI
+                  RECOMMANDATION
+Question en langage naturel
+          │
+          ▼
+Embedding de la question
+          │
+          ▼
+Recherche des 5 segments les plus proches (FAISS)
+          │
+          ▼
+Récupération des événements et suppression des doublons
+          │
+          ▼
+Mistral Small : sélection et classement des résultats
+          │
+          ▼
+Réponse JSON via FastAPI
 ```
 
-Le terme *RAG* décrit ici le fait de fournir au modèle génératif des événements récupérés dans une base externe plutôt que de lui demander de produire une recommandation sans contexte.
+La recherche sémantique permet d'identifier des événements à partir du **sens de la demande**, sans dépendre uniquement de la présence de mots-clés identiques.
 
-### Détails de la recherche
+## 2. Données et traitement
 
-Dans `main.py`, la fonction `RAG(prompt: str)` :
+### Source
 
-1. convertit la question en vecteur ;
-2. récupère les **5 segments** les plus proches avec `index.search(..., k=5)` ;
-3. retrouve les événements auxquels ces segments appartiennent grâce à `dico_event` ;
-4. dédoublonne les événements par titre ;
-5. demande au LLM de classer les résultats et d'écarter ceux qui ne correspondent pas ;
-6. transforme les lignes structurées produites par le LLM en objet JSON.
+Les données proviennent du jeu public **OpenAgenda**, accessible par l'API **OpenDataSoft**. La construction de l'index cible des fiches d'événements localisées à Paris et utilise un filtre sur leur année de mise à jour.
 
-**Important :** cinq segments récupérés ne signifient pas nécessairement cinq événements distincts. Plusieurs segments peuvent provenir du même événement, et le LLM peut écarter certains candidats.
+[Accéder au jeu de données OpenAgenda](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/)
 
-## Données et construction de l'index
+### Préparation et vectorisation
 
-**Source :** jeu public OpenAgenda accessible par l'API d'export OpenDataSoft :
+Pour chaque événement, quatre informations sont réunies :
 
-```text
-https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/exports/json
-```
+- **Titre**
+- **Description**
+- **Date**
+- **Lieu**
 
-La fonction `Build()` utilise des paramètres de filtrage comportant `location_city:Paris` et `updatedat:2026`. Ce dernier critère concerne la mise à jour d'une fiche, et **ne garantit pas que la date de tenue de l'événement soit en 2026 ou postérieure à la date de recherche**.
+Le texte est découpé en **segments de 500 caractères**. Chaque segment est converti en un vecteur de **1 024 dimensions** avec `mistral-embed-2312`.
 
-Pour chaque événement, le programme concatène les champs `title_fr`, `longdescription_fr`, `daterange_fr` et `location_name`, puis réalise un découpage **par blocs de 500 caractères**, sans chevauchement ni prise en compte des frontières de phrases.
+Ces vecteurs sont enregistrés dans **FAISS**. Un dictionnaire conserve leur association avec les événements d'origine pour restituer les informations complètes après la recherche.
 
-Chaque segment est transformé en embedding, puis ajouté à un index `faiss.IndexFlatL2(1024)`. Ce type d'index effectue une recherche exacte selon la distance euclidienne au carré. Le dictionnaire `dico_event` permet de faire correspondre les indices des segments aux événements d'origine.
+L'index et les données sont sauvegardés localement avec **Joblib**, ce qui permet d'interroger le système sans recalculer les embeddings à chaque lancement.
 
-Les artefacts chargés par le programme au démarrage sont :
+### Recherche et génération
 
-- `events.joblib` : événements source ;
-- `dico_event` : correspondances événements/segments ;
-- `FAISS_Index` : index FAISS sérialisé.
+Lorsqu'une requête est reçue :
 
-Le dépôt prévoit ainsi une utilisation du RAG sans recalculer les embeddings à chaque lancement.
+1. La demande est transformée en embedding avec le même modèle que les événements.
+2. FAISS recherche les **5 segments les plus proches**, avec une distance euclidienne (`IndexFlatL2`).
+3. Les événements associés sont récupérés et les doublons de titres sont supprimés.
+4. **Mistral Small** examine les candidats, écarte ceux jugés hors sujet et classe les autres selon la demande.
+5. L'API renvoie les résultats dans un objet JSON contenant le titre, la description, la date et l'emplacement.
 
-## Choix technologiques et modèles
+Les cinq voisins recherchés sont des **segments**, et non nécessairement cinq événements distincts.
 
-| Composant | Technologie utilisée | Rôle |
+## 3. Technologies et choix techniques
+
+| Technologie | Utilisation | Intérêt dans le projet |
 |---|---|---|
-| Langage | Python | Orchestration du pipeline |
-| API | FastAPI / Uvicorn | Routes HTTP et documentation Swagger |
-| Source de données | OpenAgenda via OpenDataSoft | Événements culturels |
-| Embeddings | `mistral-embed-2312` | Représentation vectorielle des segments et des questions |
-| Recherche vectorielle | FAISS `IndexFlatL2` | Recherche des voisins les plus proches |
-| Génération | `mistral-small-2603` via LangChain | Filtrage, classement, formulation |
-| Persistance | Joblib | Sauvegarde et chargement des données et de l'index |
-| Déploiement local | Docker | Environnement reproductible |
-| Tests | TestClient / assertions Python ; pytest et pytest-cov pour la mesure | Vérifications fonctionnelles et couverture |
+| **Python** | Pipeline de traitement et logique applicative | Écosystème adapté à l'IA et au traitement des données |
+| **OpenAgenda / OpenDataSoft** | Collecte d'événements | Données culturelles publiques |
+| **Mistral Embed** (`mistral-embed-2312`) | Vectorisation des textes et des questions | Recherche fondée sur la proximité sémantique |
+| **FAISS** (`IndexFlatL2`) | Recherche des vecteurs les plus proches | Recherche vectorielle exacte sur l'index local |
+| **Mistral Small** (`mistral-small-2603`) | Sélection, classement et formulation | Production d'une réponse adaptée à la demande |
+| **LangChain** | Intégration des modèles Mistral à l'application | Simplification des interactions avec les modèles |
+| **FastAPI / Uvicorn** | Exposition des fonctionnalités sous forme d'API HTTP | Interface simple, documentation Swagger intégrée |
+| **Joblib** | Persistance de l'index et des données | Réutilisation des résultats de l'indexation |
+| **Docker** | Exécution de l'application | Environnement reproductible |
 
-Le choix d'une recherche sémantique permet de rapprocher des formulations différentes d'un même besoin. FAISS est adapté à une recherche vectorielle locale ; Mistral Small est utilisé pour transformer les candidats récupérés en recommandations lisibles. Les raisons de coût, de latence ou de supériorité par rapport à d'autres solutions n'ont pas été mesurées comparativement dans ce projet.
+L'architecture sépare la récupération des informations et leur reformulation. Le modèle génératif travaille ainsi sur des **événements extraits de la base** plutôt que de produire des suggestions sans source de données.
 
-## Installation et exécution avec Docker
+## 4. API
 
-### Prérequis
+L'application expose deux routes principales :
 
-- Docker Desktop (ou un moteur Docker compatible) ;
-- une clé API Mistral valide ;
-- un accès réseau pour les appels au service Mistral.
+| Route | Méthode | Fonction |
+|---|---|---|
+| `/Build` | POST | Collecte les données et construit les représentations vectorielles ainsi que l'index FAISS |
+| `/RAG` | POST | Recherche et recommande des événements en réponse à une question |
 
-### 1. Récupérer le dépôt
+### Exemple de requête
 
-```bash
-git clone https://github.com/tmininihub/Projet-7-OC.git
-cd Projet-7-OC
-```
-
-Il est aussi possible de télécharger le ZIP depuis GitHub puis de l'extraire.
-
-### 2. Configurer la clé API
-
-Créer un fichier `.env` à la racine :
-
-```dotenv
-MISTRAL_API_KEY=VOTRE_CLE_API
-```
-
-Ne pas publier cette clé. Le dépôt ignore `.env` via `.gitignore`.
-
-### 3. Construire l'image
-
-```bash
-docker build -t project7-rag .
-```
-
-Le `Dockerfile` fourni utilise **Python 3.12 slim**, installe les dépendances de `requirements.txt` et démarre Uvicorn.
-
-### 4. Démarrer l'API
-
-```bash
-docker run --env-file .env -p 8000:8000 project7-rag
-```
-
-Ouvrir ensuite **http://localhost:8000/docs** pour accéder à Swagger.
-
-> **Attention :** le fichier `main.py` contient actuellement un appel direct à `RAG("Je cherche un event sur le spatial")` à la fin du module. Cet appel s'exécute aussi lors de l'import par Uvicorn et déclenche une requête Mistral supplémentaire au démarrage. Il est conseillé de le retirer ou de le placer dans une condition `if __name__ == "__main__":`.
-
-### Exécution locale sans Docker (facultatif)
-
-```bash
-python -m pip install -r requirements.txt
-uvicorn main:app --reload
-```
-
-Utiliser un environnement virtuel Python et renseigner `MISTRAL_API_KEY` au préalable. Les fichiers de données et d'index doivent être présents dans le répertoire de travail attendu.
-
-## API et exemples d'utilisation
-
-### `POST /RAG`
-
-Effectue une recherche à partir du paramètre **`prompt` passé dans la query string** (ce n'est pas un corps JSON).
-
-Depuis Swagger : sélectionner `POST /RAG` → **Try it out** → remplir `prompt` → **Execute**.
-
-Exemple en ligne de commande :
+`POST /RAG` reçoit le paramètre texte `prompt` dans l'URL :
 
 ```bash
 curl -X POST "http://localhost:8000/RAG?prompt=Je%20cherche%20un%20event%20sur%20le%20spatial"
 ```
 
-La réponse attendue est un objet JSON contenant zéro ou plusieurs entrées `Event 1`, `Event 2`, etc., avec les champs :
+Format de réponse :
 
 ```json
 {
@@ -195,110 +130,109 @@ La réponse attendue est un objet JSON contenant zéro ou plusieurs entrées `Ev
 }
 ```
 
-La structure dépend de la bonne application du format demandé au LLM. **Si le modèle renvoie un texte non conforme**, les lignes ne sont pas retenues par le parseur ; une réponse vide peut donc refléter une erreur de formatage et pas seulement une absence d'événements.
+La documentation interactive de l'API est accessible à l'adresse **http://localhost:8000/docs** une fois le serveur démarré.
 
-### `POST /Build`
+## 5. Tests et évaluation
 
-Télécharge des données OpenDataSoft et produit des embeddings et un index FAISS. Cette opération est coûteuse par rapport à une simple interrogation de `/RAG`, et le problème de nom de fichier décrit plus haut doit être résolu avant de compter sur une reconstruction complète.
+### Tests fonctionnels
 
-## Tests, couverture et évaluation
+Les vérifications implémentées dans `test_main.py` portent sur :
 
-### Vérifications actuellement présentes
+- la taille maximale des segments (**500 caractères**) ;
+- la dimension des embeddings (**1 024**) ;
+- le code HTTP retourné par `/RAG` (**200** pour la requête testée) ;
+- la présence du thème « jazz » dans une réponse à une question sur le jazz.
 
-Le fichier `test_main.py` vérifie notamment :
+Les vérifications de génération d'embeddings et de réponse RAG font intervenir les services Mistral : elles relèvent donc aussi de **tests d'intégration**, et pas uniquement de tests unitaires isolés.
 
-- que les segments examinés ne dépassent pas 500 caractères ;
-- que les embeddings renvoyés ont une dimension de 1 024 ;
-- qu'une requête `POST /RAG` renvoie un code HTTP 200 ;
-- que le texte d'une réponse à une question sur le jazz contient le terme `jazz`.
+### Couverture de code
 
-Ces vérifications existent dans le dépôt, mais **ne constituent pas toutes des tests unitaires isolés** : les embeddings et la route RAG utilisent des services externes, et le test ne remplace pas ces appels par des mocks.
+Les mesures de couverture réalisées donnent :
 
-**Limite du fichier actuel :** `def test_RAG(texte)` attend un argument que pytest interprète comme un nom de fixture. Or aucune fixture `texte` n'est définie dans ce fichier. La fonction est également appelée directement en fin de fichier. La découverte standard par `pytest` doit donc être corrigée avant de présenter cette suite comme automatisée et reproductible.
+| Périmètre | Couverture |
+|---|---:|
+| Application complète | **67 %** |
+| Application hors fonction de construction `Build` | **100 %** |
 
-### Couverture communiquée
+La différence correspond à la partie consacrée à la construction de l'index, non exercée par les tests considérés. Ces pourcentages mesurent l'exécution des lignes de code, pas directement la précision des recommandations.
 
-Une mesure effectuée sur le projet complet a été **rapportée à 67 %**. Après retrait de la fonction `Build` du code mesuré, le résultat fourni est :
+### Évaluation qualitative
 
-```text
-Name      Stmts   Miss  Cover
-----------------------------
-main.py      56      0   100%
-----------------------------
-TOTAL        56      0   100%
-```
+Une recherche portant sur le **domaine spatial** a produit cinq propositions en rapport avec le sujet :
 
-La couverture est donc de **100 % pour le périmètre restant après retrait de `Build`**, pas de 100 % pour l'application complète. Le 67 % est un résultat communiqué, non une mesure reproduite lors de la rédaction de ce document. La couverture des lignes ne garantit pas à elle seule la qualité des assertions ni la couverture de tous les comportements.
+| Événement retourné | Lieu |
+|---|---|
+| Objectifs Terre, la révolution des satellites | Cité des sciences et de l'industrie |
+| Journées Portes Ouvertes à l'Agence spatiale européenne | Siège de l'Agence spatiale européenne |
+| Les conférences — Explorer l'espace, mieux habiter notre planète | Cité des sciences et de l'industrie |
+| Visite commentée de l'exposition Mission spatiale | Cité des sciences et de l'industrie |
+| Rendez-vous avec l'espace : Week-end spatial | Cité des sciences et de l'industrie |
 
-Une fois les tests adaptés à pytest, les commandes pertinentes sont :
+**Observation :** les cinq propositions correspondent thématiquement à la requête. Cet exemple met en évidence la capacité du système à retrouver des contenus liés à un sujet commun.
+
+Il s'agit d'une **observation qualitative**, et non d'une mesure de précision statistique. Le calcul de métriques comme la **Precision@5** ou le **Recall@5** nécessite un jeu de questions accompagné d'une liste d'événements pertinents annotés indépendamment des réponses du RAG.
+
+## 6. Limites et perspectives d'amélioration
+
+Les premiers résultats montrent l'intérêt de la recherche sémantique, mais plusieurs axes pourraient améliorer la pertinence et la robustesse du système.
+
+| Axe | Limite actuelle | Amélioration envisagée |
+|---|---|---|
+| **Actualité des événements** | Certaines recommandations peuvent concerner des dates passées | Filtrage explicite des dates de tenue et exclusion des événements expirés |
+| **Découpage du texte** | Segments fixes de 500 caractères, pouvant interrompre une phrase | Découpage sémantique ou avec chevauchement |
+| **Diversité des résultats** | La recherche s'effectue sur cinq segments, parfois issus d'un même événement | Récupération plus large, puis sélection d'événements distincts |
+| **Pertinence** | Le classement final dépend du modèle génératif | Comparaison de différentes valeurs de `k`, filtres métier et seuils de pertinence |
+| **Structure de sortie** | La mise en forme dépend du respect des consignes par le LLM | Sorties JSON contraintes et validation par schéma |
+| **Évaluation** | Vérifications fonctionnelles et observations qualitatives limitées | Jeu de test annoté et mesures reproductibles de précision et de rappel |
+| **Indexation** | Création des embeddings segment par segment | Traitement par lots pour réduire le nombre d'appels |
+
+L'amélioration prioritaire est le **contrôle des dates** : une recommandation sémantiquement pertinente doit également correspondre à un événement disponible au moment de la recherche.
+
+## 7. Installation et démonstration
+
+### Prérequis
+
+- Docker Desktop
+- Une clé API Mistral
+
+### Récupération du projet
 
 ```bash
-python -m pytest -v
-python -m pytest --cov=main --cov-report=term-missing
+git clone https://github.com/tmininihub/Projet-7-OC.git
+cd Projet-7-OC
 ```
 
-La seconde commande suppose que `pytest-cov` est installé.
+Créer un fichier `.env` à la racine :
 
-### Exemple de réponse : événements spatiaux
+```dotenv
+MISTRAL_API_KEY=VOTRE_CLE_MISTRAL
+```
 
-Pour la requête « Je cherche un event sur le spatial », une sortie de cinq événements a été communiquée :
+### Démarrage avec Docker
 
-| Titre renvoyé | Date indiquée | Lieu |
-|---|---|---|
-| Objectifs Terre, la révolution des satellites | 2 août – 31 décembre 2022 | Cité des sciences et de l'Industrie |
-| Journées Portes Ouvertes à l'Agence Spatiale Européenne | 19 et 20 septembre (année non précisée) | Siège de l'Agence spatiale européenne |
-| Les conférences – Explorer l'espace, mieux habiter notre planète | 21 octobre 2023 – 20 janvier 2024 | Cité des sciences et de l'Industrie |
-| Visite commentée de l'exposition Mission spatiale | Samedi 31 janvier (année non précisée) | Cité des sciences et de l'Industrie |
-| Rendez-vous avec l'espace : Week-end spatial | 14 et 15 février (année non précisée) | Cité des sciences et de l'Industrie |
+```bash
+docker build -t project7-rag .
+docker run --env-file .env -p 8000:8000 project7-rag
+```
 
-**Observation qualitative :** les cinq titres et descriptions correspondent au thème spatial. Cela illustre la capacité du pipeline à retrouver des contenus thématiquement proches, **sans démontrer une précision ou un rappel mesurés**.
+Accéder ensuite à **http://localhost:8000/docs**, puis utiliser la route `POST /RAG` avec une question en langage naturel.
 
-**Limite importante :** certaines dates sont explicitement passées, et d'autres ne comportent pas d'année. Au **3 novembre 2026**, on ne peut donc pas considérer ces cinq recommandations comme une liste validée d'événements à venir. L'API ne contient pas actuellement de filtrage explicite sur les dates futures dans sa route `/RAG`.
+Le dépôt contient un index et des données déjà enregistrés, permettant une démonstration sans reconstruction préalable de la base vectorielle.
 
-### Autres limites identifiées dans le code
-
-- **Découpage naïf** : les blocs fixes de 500 caractères peuvent couper une phrase ou séparer des informations importantes.
-- **Recherche sur seulement cinq segments** : possibilité de récupérer plusieurs segments d'un même événement, limitant la diversité des candidats.
-- **Filtrage de pertinence laissé au LLM** : absence de seuil explicite sur la distance FAISS.
-- **Formatage fragile** : le code découpe les lignes sur le séparateur exact `" | "` ; une sortie différente peut être ignorée.
-- **Dépendances à des services externes** : le comportement dépend de la disponibilité, des quotas et de la réponse des API Mistral.
-- **Coût de la construction** : embeddings demandés segment par segment, sans traitement par lots.
-- **Chargement des fichiers à l'import** : des artefacts manquants peuvent empêcher l'application de démarrer.
-- **Couverture partielle** : le chemin de construction de l'index n'est pas couvert selon les résultats rapportés.
-- **Tests à restructurer** : le fichier existant combine un appel direct et une fonction dont le paramètre ne correspond pas à une fixture pytest.
-
-## Pistes d'amélioration
-
-Les améliorations suivantes sont **proposées**, non présentées comme déjà implémentées :
-
-1. **Fiabiliser les données** : filtrer les événements selon leur vraie date de déroulement ; normaliser les dates incomplètes ; contrôler les valeurs manquantes.
-2. **Corriger le cycle de reconstruction** : harmoniser le nom du fichier FAISS, tester `/Build`, gérer les erreurs réseau et prévoir des sauvegardes atomiques.
-3. **Optimiser l'indexation** : regrouper les embeddings par lots et utiliser un découpage respectant mieux les phrases, éventuellement avec chevauchement.
-4. **Améliorer la récupération** : comparer plusieurs valeurs de `k`, diversifier les événements, tester des seuils de pertinence et des filtres sur les dates/lieux.
-5. **Sécuriser la génération** : imposer une réponse structurée JSON validée par un schéma plutôt que de parser librement des lignes au séparateur `|`.
-6. **Rendre les tests fiables** : utiliser pytest avec fixtures et mocks, séparer tests unitaires et tests d'intégration, couvrir les cas d'erreur et la route `/Build`.
-7. **Quantifier la pertinence** : constituer un jeu annoté indépendant et publier les scores de récupération et de qualité finale.
-8. **Nettoyer le démarrage** : retirer l'appel `RAG(prompt)` exécuté à l'import et fournir une route de contrôle de santé si nécessaire.
-
-## Structure du dépôt
-
-Principaux fichiers vérifiés dans le dépôt GitHub :
+## 8. Organisation du projet
 
 ```text
 Projet-7-OC/
-├── README.md
-├── main.py               # Construction de l'index et route RAG
-├── test_main.py          # Vérifications actuellement présentes
-├── Dockerfile            # Image Python 3.12, Uvicorn
-├── requirements.txt      # Dépendances Python
-├── .gitignore            # Exclut .env
-├── events.joblib         # Événements sérialisés
-├── dico_event            # Mapping segment -> événement (via dictionnaire)
-└── FAISS_Index           # Index vectoriel chargé par main.py
+├── main.py            # Pipeline d'indexation et API RAG
+├── test_main.py       # Vérifications fonctionnelles
+├── events.joblib      # Données d'événements
+├── dico_event         # Association des segments aux événements
+├── FAISS_Index        # Index vectoriel
+├── requirements.txt   # Dépendances Python
+├── Dockerfile         # Conteneurisation de l'API
+└── README.md          # Documentation technique
 ```
-
-Le code utilise également le nom `FAISS Index` pour une **sortie de reconstruction** : il ne faut pas le confondre avec le fichier `FAISS_Index` chargé par l'API.
 
 ---
 
-**Cadre pédagogique :** projet réalisé dans le cadre du Projet 7 OpenClassrooms. Ce README documente l'implémentation consultée, les résultats de couverture communiqués et les observations fournies, sans attribuer de métriques non calculées au système.
+*Projet 7 — Formation OpenClassrooms. Système RAG de recommandation d'événements culturels à Paris.*
