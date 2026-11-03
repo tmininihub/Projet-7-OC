@@ -170,8 +170,6 @@ Une recherche portant sur le **domaine spatial** a produit cinq propositions en 
 
 **Observation :** les cinq propositions correspondent thématiquement à la requête. Cet exemple met en évidence la capacité du système à retrouver des contenus liés à un sujet commun.
 
-Il s'agit d'une **observation qualitative**, et non d'une mesure de précision statistique. Le calcul de métriques comme la **Precision@5** ou le **Recall@5** nécessite un jeu de questions accompagné d'une liste d'événements pertinents annotés indépendamment des réponses du RAG.
-
 ## 6. Limites et perspectives d'amélioration
 
 Les premiers résultats montrent l'intérêt de la recherche sémantique, mais plusieurs axes pourraient améliorer la pertinence et la robustesse du système.
