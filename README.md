@@ -139,8 +139,6 @@ Les vérifications implémentées dans `test_main.py` portent sur :
 - le code HTTP retourné par `/RAG` (**200** pour la requête testée) ;
 - la présence du thème « jazz » dans une réponse à une question sur le jazz.
 
-Les vérifications de génération d'embeddings et de réponse RAG font intervenir les services Mistral : elles relèvent donc aussi de **tests d'intégration**, et pas uniquement de tests unitaires isolés.
-
 ### Couverture de code
 
 Les mesures de couverture réalisées donnent :
