@@ -1,4 +1,4 @@
-# Projet 7 OpenClassrooms — Puls-Events
+# Projet 7 OpenClassrooms — Système RAG
 
 API de recommandation d'événements culturels à Paris fondée sur une architecture **RAG** (*Retrieval-Augmented Generation*).
 
