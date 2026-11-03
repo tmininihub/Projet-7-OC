@@ -28,15 +28,15 @@ OpenDataSoft / OpenAgenda (événements parisiens)
 Champs : titre + description + date + lieu
              |
              v
-Découpage en segments de 500 caractères
+Découpage en chunks de 500 caractères
              |
              v
 Mistral Embeddings (mistral-embed-2312)
              |
              v
-Vecteurs de 1 024 dimensions -> FAISS IndexFlatL2
+Vecteurs de 1 024 dimensions 
              |
-             +-> correspondance segment <-> événement
+      FAISS IndexFlatL2
              |
              v
   Sauvegarde locale (joblib)
@@ -49,10 +49,10 @@ Question de l'utilisateur
 Embedding de la question (même modèle Mistral)
              |
              v
-Recherche des 5 segments les plus proches dans FAISS
+Recherche des 5 vecteurs les plus proches dans FAISS
              |
              v
-Remontée aux événements et suppression des doublons de titres
+Remontée aux événements grâce aux chunks 
              |
              v
 Mistral Small : sélection, classement et mise en forme
