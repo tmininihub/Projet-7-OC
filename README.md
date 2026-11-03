@@ -179,12 +179,8 @@ Les premiers résultats montrent l'intérêt de la recherche sémantique, mais p
 | **Actualité des événements** | Certaines recommandations peuvent concerner des dates passées | Filtrage explicite des dates de tenue et exclusion des événements expirés |
 | **Découpage du texte** | Segments fixes de 500 caractères, pouvant interrompre une phrase | Découpage sémantique ou avec chevauchement |
 | **Diversité des résultats** | La recherche s'effectue sur cinq segments, parfois issus d'un même événement | Récupération plus large, puis sélection d'événements distincts |
-| **Pertinence** | Le classement final dépend du modèle génératif | Comparaison de différentes valeurs de `k`, filtres métier et seuils de pertinence |
-| **Structure de sortie** | La mise en forme dépend du respect des consignes par le LLM | Sorties JSON contraintes et validation par schéma |
-| **Évaluation** | Vérifications fonctionnelles et observations qualitatives limitées | Jeu de test annoté et mesures reproductibles de précision et de rappel |
 | **Indexation** | Création des embeddings segment par segment | Traitement par lots pour réduire le nombre d'appels |
 
-L'amélioration prioritaire est le **contrôle des dates** : une recommandation sémantiquement pertinente doit également correspondre à un événement disponible au moment de la recherche.
 
 ## 7. Installation et démonstration
 
