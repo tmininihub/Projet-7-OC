@@ -111,11 +111,7 @@ L'application expose deux routes principales :
 
 ### Exemple de requête
 
-`POST /RAG` reçoit le paramètre texte `prompt` dans l'URL :
-
-```bash
-curl -X POST "http://localhost:8000/RAG?prompt=Je%20cherche%20un%20event%20sur%20le%20spatial"
-```
+Prompt : "Je cherche un event sur le spatial"
 
 Format de réponse :
 
