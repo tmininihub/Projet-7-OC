@@ -98,12 +98,6 @@ Les artefacts chargés par le programme au démarrage sont :
 
 Le dépôt prévoit ainsi une utilisation du RAG sans recalculer les embeddings à chaque lancement.
 
-### Point d'attention sur la reconstruction
-
-Le code actuel expose **`POST /Build`**, et non `/Rebuild`. De plus, `Build()` sauvegarde l'index sous le nom **`FAISS Index`** (avec espace), alors que le démarrage charge **`FAISS_Index`** (avec underscore). Cette incohérence devra être corrigée pour que la reconstruction remplace réellement l'index utilisé au prochain démarrage.
-
-La reconstruction nécessite des appels Mistral pour les segments ; elle peut être longue et consommer des crédits API. Elle n'est pas nécessaire pour les tests simples de `/RAG` avec les artefacts déjà présents.
-
 ## Choix technologiques et modèles
 
 | Composant | Technologie utilisée | Rôle |
