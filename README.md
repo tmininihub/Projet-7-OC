@@ -150,6 +150,10 @@ Les mesures de couverture réalisées donnent :
 
 La différence correspond à la partie consacrée à la construction de l'index, non exercée par les tests considérés. Ces pourcentages mesurent l'exécution des lignes de code, pas directement la précision des recommandations.
 
+### Jeu de test annoté
+
+Le fichier [**`evaluation.csv`**](evaluation.csv) regroupe **6 requêtes réelles et 18 réponses du système RAG**, accompagnées d'annotations de pertinence et de leurs justifications.
+
 ### Évaluation qualitative
 
 Une recherche portant sur le **domaine spatial** a produit cinq propositions en rapport avec le sujet :
