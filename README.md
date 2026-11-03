@@ -239,23 +239,6 @@ python -m pytest --cov=main --cov-report=term-missing
 
 La seconde commande suppose que `pytest-cov` est installé.
 
-### Jeu de test annoté : état et méthode
-
-Un **jeu de test annoté** associe à chaque question des **événements jugés pertinents à l'avance**, indépendamment des résultats du système. Il permet de vérifier objectivement la qualité de la recherche.
-
-Les exemples de sorties présentés ci-dessous sont des **observations**, mais ils ne suffisent pas à constituer un jeu annoté complet : les références attendues n'ont pas été documentées séparément.
-
-Format conseillé :
-
-| Question | Événements attendus (annotations humaines) | Événements renvoyés | Pertinence / commentaire |
-|---|---|---|---|
-| Je cherche un événement sur le spatial | À renseigner avant le test | À renseigner après le test | À évaluer |
-| Je cherche un événement de jazz | À renseigner avant le test | À renseigner après le test | À évaluer |
-
-À terme, utiliser plusieurs questions variées et évaluer les résultats avec **Precision@k**, **Recall@k** ou **Hit@k**. Aucune valeur chiffrée de ces métriques n'est annoncée ici, faute de références annotées et de calcul vérifiable.
-
-## Résultats observés et limites
-
 ### Exemple de réponse : événements spatiaux
 
 Pour la requête « Je cherche un event sur le spatial », une sortie de cinq événements a été communiquée :
