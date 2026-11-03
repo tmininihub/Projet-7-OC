@@ -10,3 +10,4 @@ langchain
 langchain-mistralai
 langchain-community
 ragas
+requests
