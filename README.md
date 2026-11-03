@@ -150,6 +150,14 @@ Les mesures de couverture réalisées donnent :
 
 La différence correspond à la partie consacrée à la construction de l'index, non exercée par les tests considérés. Ces pourcentages mesurent l'exécution des lignes de code, pas directement la précision des recommandations.
 
+### Jeu de test annoté
+
+Le fichier [`evaluation.csv`](evaluation.csv) propose un premier jeu de référence pour évaluer la pertinence des recommandations. Il regroupe **10 requêtes**, **10 événements** et **100 couples requête–événement** annotés en pertinence binaire (1 : pertinent ; 0 : non pertinent), avec une justification par annotation.
+
+Les événements de référence proviennent des exemples étudiés sur les thèmes du **spatial** et du **jazz**. Les annotations ont été préparées à partir de leurs intitulés et descriptions disponibles, **avec assistance IA**. Elles nécessitent une validation humaine avant de constituer une vérité terrain définitive.
+
+Ce fichier représente un **jeu de référence candidat** et non un relevé de prédictions de l'API. Les performances de récupération (Precision@5, Recall@5, etc.) ne sont pas chiffrées ici : leur calcul nécessite de confronter les résultats effectifs du RAG à ces annotations. L'évaluation couvre uniquement les événements de référence, et non l'intégralité du catalogue.
+
 ### Évaluation qualitative
 
 Une recherche portant sur le **domaine spatial** a produit cinq propositions en rapport avec le sujet :
@@ -213,6 +221,7 @@ Le dépôt contient un index et des données déjà enregistrés, permettant une
 Projet-7-OC/
 ├── main.py            # Pipeline d'indexation et API RAG
 ├── test_main.py       # Vérifications fonctionnelles
+├── evaluation.csv      # Jeu de test de pertinence annoté
 ├── events.joblib      # Données d'événements
 ├── dico_event         # Association des segments aux événements
 ├── FAISS_Index        # Index vectoriel
