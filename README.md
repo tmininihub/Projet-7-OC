@@ -154,6 +154,22 @@ La différence correspond à la partie consacrée à la construction de l'index,
 
 Le fichier [**`evaluation.csv`**](evaluation.csv) regroupe **6 requêtes réelles et 18 réponses du système RAG**, accompagnées d'annotations de pertinence et de leurs justifications.
 
+### Évaluation sur 20 requêtes (annotations provisoires)
+
+Un second jeu de test couvre **20 questions réelles** et **53 événements retournés par l'API**. Chaque événement reçoit une note de pertinence thématique (0 = non pertinent, 1 = partiel, 2 = pertinent), à partir de son titre, sa description et son contexte.
+
+| Indicateur | Résultat |
+|---|---:|
+| Résultats pleinement pertinents | **43 / 53 (81,13 %)** — précision micro |
+| Précision stricte moyenne par question | **75,00 %** — macro |
+| Questions avec au moins un résultat pleinement pertinent | **17 / 20 (85 %)** — Hit Rate |
+| Résultats partiellement pertinents / non pertinents | **6 / 4** |
+| Résultats avec une date explicitement passée | **20 / 53** |
+
+Ces chiffres sont **provisoires** : les annotations sont proposées à partir des sorties du RAG et restent à valider humainement. La fraîcheur des dates est évaluée séparément de la pertinence thématique. Aucun *Recall@k* n'est calculé, faute de référence exhaustive dans le corpus ; la précision porte sur les événements effectivement retournés (entre 1 et 4 par requête), et non sur un k fixe.
+
+**Fichiers :** [annotations détaillées](evaluation_RAG_20_questions_detail.csv) · [scores par requête](evaluation_RAG_20_questions_scores.csv) · [méthodologie et limites](METHODOLOGIE_EVALUATION_RAG.md).
+
 ### Évaluation qualitative
 
 Une recherche portant sur le **domaine spatial** a produit cinq propositions en rapport avec le sujet :
